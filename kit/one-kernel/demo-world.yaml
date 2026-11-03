@@ -1,0 +1,143 @@
+# One-kernel-many-hosts canonical demo world (docs/one-kernel-many-hosts.md).
+#
+# A REAL WorldManifest, compiled by the real compiler, governing the SAME case
+# set (cases.yaml) on every entry point: in-process `gate()`, the `harness gate`
+# wire ABI, `harness cc-hook`, OpenCode-shaped requests, and `harness
+# mcp-gateway` over `harness mock-jira`. Host-neutral lowercase vocabulary.
+#
+# The parity guarantee: same manifest + same request ⇒ same decision / rule /
+# post-call taint / manifest_hash on every entry point (tests/one_kernel.rs).
+world_id: one-kernel-demo
+
+actors:
+  - { name: developer, kind: User }
+  - { name: agent, kind: Model }
+  - { name: jira, kind: McpServer }
+  - { name: shell, kind: ShellWorker }
+
+data_classes: [Public, Workspace, Secret, Credential, Generated, External]
+
+channels:
+  - { name: user_cli, trust: Trusted, taint: false }
+  - { name: workspace_files, trust: SemiTrusted, taint: true }
+  - { name: shell_output, trust: SemiTrusted, taint: true }
+  - { name: mcp_output, trust: Untrusted, taint: true }
+  - { name: web_fetch, trust: Untrusted, taint: true }
+
+capabilities:
+  - { trust: Trusted, actions: [Read, Write, Patch, Command, Pty, Mcp, Web, Memory] }
+  - { trust: SemiTrusted, actions: [Read, Write, Patch, Command] }
+  - { trust: Untrusted, actions: [Read] }
+  - { trust: Derived, actions: [Read] }
+
+base_actions:
+  # --- JIRA reads (the shaped MCP surface) ---
+  - name: jira_get_issue
+    action_type: Read
+    side_effect: Read
+    backing: !McpServer { server: jira, tool: get_issue }
+    schema:
+      type: object
+      properties:
+        issue_key: { type: string }
+  - name: jira_search_issues_using_jql
+    action_type: Read
+    side_effect: Read
+    backing: !McpServer { server: jira, tool: search_issues_using_jql }
+    schema:
+      type: object
+      properties:
+        jql: { type: string }
+  - name: jira_get_project
+    action_type: Read
+    side_effect: Read
+    backing: !McpServer { server: jira, tool: get_project }
+    schema:
+      type: object
+      properties:
+        project_key: { type: string }
+  # --- The one JIRA write, subject to the taint floor (External) ---
+  - name: jira_add_comment
+    action_type: Mcp
+    side_effect: External
+    backing: !McpServer { server: jira, tool: add_comment }
+    schema:
+      type: object
+      properties:
+        issue_key: { type: string }
+        body: { type: string }
+  # --- native tools (host-neutral lowercase) ---
+  - { name: read, action_type: Read, side_effect: Read }
+  - { name: webfetch, action_type: Web, side_effect: Network }
+  - { name: write, action_type: Write, side_effect: FilesystemWrite }
+  - { name: edit, action_type: Patch, side_effect: FilesystemWrite }
+  - { name: notebookedit, action_type: Patch, side_effect: FilesystemWrite }
+  - { name: write_instructions, action_type: Write, side_effect: Memory }
+  - { name: bash, action_type: Command, side_effect: Process }
+  - { name: bash_network, action_type: Command, side_effect: Network }
+  - { name: bash_destructive, action_type: Command, side_effect: Process, approval_required: true }
+  - { name: bash_unclassified, action_type: Command, side_effect: Network, approval_required: true }
+
+# DELIBERATELY NOT DECLARED (→ ABSENT, never offered): jira_delete_issue,
+# jira_create_issue, jira_bulk_create_issues, jira_transition_issue.
+
+# Kernel-side command classification (D36): the shared pattern lists — keep
+# byte-identical with .claude/cc-world.yaml and
+# docs/demos/opencode/opencode-world.yaml (pinned by tests/one_kernel.rs).
+command_classes:
+  - action: bash
+    arg: command
+    default_to: bash_unclassified
+    classes:
+      - to: bash_network
+        patterns: ["curl ", "wget ", "nc ", "ncat ", "telnet ", "ssh ", "scp ", "sftp "]
+      - to: bash_destructive
+        patterns: ["rm -rf", "rm -fr", "sudo ", "mkfs", "dd if=", ":(){"]
+
+# Instruction and memory files (D83): the shared pattern list, byte-identical
+# with .claude/cc-world.yaml and .agents/agy-world.yaml (tests/one_kernel.rs).
+# This world is host-neutral, so each action is read under both spellings the
+# hosts send: Claude Code's `file_path` / `notebook_path`, and the `path`
+# Antigravity's adapter aliases its PascalCase keys into.
+path_classes:
+  - to: write_instructions
+    from:
+      - { action: write, arg: file_path }
+      - { action: write, arg: path }
+      - { action: edit, arg: file_path }
+      - { action: edit, arg: path }
+      - { action: notebookedit, arg: notebook_path }
+      - { action: notebookedit, arg: path }
+    patterns:
+      - "**/CLAUDE.md"
+      - "**/CLAUDE.local.md"
+      - "**/AGENTS.md"
+      - "**/GEMINI.md"
+      - "**/.claude/agents/**"
+      - "**/.claude/commands/**"
+      - "**/.claude/rules/**"
+      - "**/.claude/skills/**"
+      - "**/.claude/projects/*/memory/**"
+      - "**/.agents/rules/**"
+      - "**/.agents/skills/**"
+      - "**/.agents/workflows/**"
+
+# Tainted data cannot reach externally-effectful surfaces (the taint floor,
+# invariant 7).
+transition_policies:
+  - { from_taint: Tainted, side_effect: Network, decision: Deny, rule: no_tainted_network }
+  - { from_taint: Tainted, side_effect: External, decision: Deny, rule: no_tainted_external }
+  - { from_taint: Tainted, side_effect: Credential, decision: Deny, rule: no_tainted_credential }
+  - { from_taint: Tainted, side_effect: Memory, decision: Deny, rule: no_tainted_memory_write }
+  - { from_taint: Tainted, side_effect: PersistentWrite, decision: Deny, rule: no_tainted_persistent_write }
+
+budget:
+  max_tokens_per_session: 1000000
+  max_commands_per_task: 200
+  command_timeout_ms: 120000
+
+observability:
+  redact:
+    - "env.*_TOKEN"
+    - "env.*_KEY"
+    - "**/.env"
