@@ -2,7 +2,7 @@
 //!
 //! Each case is a gate request and the verdict the kernel gives it. This sends the
 //! request to `harness gate --world <world>` and compares `decision`, `rule`, the
-//! post-call `context.taint`, and `context.flow` where the case states one. The kit
+//! post-call `context.taint`, and `action` and `context.flow` where the case states them. The kit
 //! comes from the kernel release named in `KERNEL_VERSION`; the binary should be the
 //! npm release of the same version (`npm install -g ai2rules-harness@<version>`).
 //!
@@ -79,6 +79,10 @@ fn compare(expect: &Value, got: &Value) -> Vec<String> {
     check("decision", &expect["decision"], &got["decision"]);
     check("rule", &expect["rule"], &got["rule"]);
     check("taint", &expect["taint"], &got["context"]["taint"]);
+    // The effective action after shell command classification, where the case pins it.
+    if !expect["action"].is_null() {
+        check("action", &expect["action"], &got["action"]);
+    }
     if !expect["flow"].is_null() {
         check("flow", &expect["flow"], &got["context"]["flow"]);
     }
