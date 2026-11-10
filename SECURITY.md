@@ -22,9 +22,9 @@ that show the problem, and what you expected instead.
 - **In scope:** anything that makes the released kernel's verdict wrong,
   unenforced or bypassable; the `ai2rules-harness` npm packages and the published
   binaries; the release path that builds them; and anything that lets the harness
-  modify, disable or point away from the policy that governs it. The kernel's full
-  policy, with what is deliberately out of scope and why, is published at
-  [ai2rules.dev/kernel/security](https://ai2rules.dev/kernel/security/).
+  modify, disable or point away from the policy that governs it. Some properties are
+  out of scope by design (the hook is advisory, not a sandbox); if unsure, report
+  privately and we will say which it is.
 - **Design arguments** — that a known property *should* change — are welcome as
   ordinary issues here.
 - **Not in scope:** the code in `concepts/`. It is illustrative, deliberately incomplete,
