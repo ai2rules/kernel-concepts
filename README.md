@@ -67,9 +67,12 @@ them as `harness-conformance-kit.tar.gz`; `scripts/update-kit.sh <version>` repl
 `kit/` and `KERNEL_VERSION` (it needs access to the private kernel repository, so the
 maintainer runs it). CI runs the kit against the npm binary on every change and weekly.
 
-## Security
+## Issues and security
 
-To report a vulnerability in the released kernel, see [SECURITY.md](SECURITY.md).
+The kernel's own repository is private, so this repository's issues are where to report
+a bug in the released kernel (`ai2rules-harness` on npm): a wrong verdict, a crash, an
+install problem. Include `harness --version`, the world and the request. A
+vulnerability goes through private reporting instead; see [SECURITY.md](SECURITY.md).
 
 ## Licence
 
